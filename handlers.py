@@ -48,7 +48,12 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
     elif data == "back":
         data = await state.get_data()
         scenario = data.get("scenario")
-        if scenario == "demo":
+        if scenario == "gift":
+            # По умолчанию – возврат в стартовое сообщение
+            await state.clear()
+            await callback.message.delete()
+            await callback.message.answer(START_MSG, reply_markup=start_inline_keyboard())
+        elif scenario == "demo":
             # Возврат в главное меню
             await state.clear()
             await callback.message.delete()
@@ -59,10 +64,10 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
             await callback.message.delete()
             await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
         else:
-            # По умолчанию – возврат в стартовое сообщение
             await state.clear()
             await callback.message.delete()
-            await callback.message.answer(START_MSG, reply_markup=start_inline_keyboard())
+            await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
+
         return
 
         await state.clear()
@@ -138,16 +143,11 @@ async def process_question(message: types.Message, state: FSMContext):
     data = await state.get_data()
     scenario = data.get("scenario")
     print(scenario)
-    if scenario == "gift":
-        await message.answer(THANKS_GIFT, reply_markup=types.ReplyKeyboardRemove())
-        await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
-        await state.clear()
-    else:
-        user = get_user(user_id)
-        if user:
-            await message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
-        #await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
-        await state.clear()
+    user = get_user(user_id)
+    if user:
+        await message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
+    #await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
+    await state.clear()
     #await state.update_data(scenario="demo")
     #await state.set_state(Form.questions)
     #if user:
