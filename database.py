@@ -8,18 +8,18 @@ CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
     full_name TEXT,
     company TEXT,
-    position TEXT,
+    question TEXT,
     phone TEXT,
     username TEXT
 )
 ''')
 conn.commit()
 
-def add_or_update_user(user_id, full_name, company, position, phone, username):
+def add_or_update_user(user_id, full_name, company, question, phone, username):
     cursor.execute('''
-        INSERT OR REPLACE INTO users (user_id, full_name, company, position, phone, username)
+        INSERT OR REPLACE INTO users (user_id, full_name, company, question, phone, username)
         VALUES (?, ?, ?, ?, ?, ?)
-    ''', (user_id, full_name, company, position, phone, username))
+    ''', (user_id, full_name, company, question, phone, username))
     conn.commit()
 
 def get_user(user_id):

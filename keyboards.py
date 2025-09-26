@@ -15,8 +15,13 @@ def back_inline_keyboard():
 
 def main_menu_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text="Наши новости", callback_data="news"))
-    builder.add(InlineKeyboardButton(text="Запросить демо", callback_data="demo"))
+    builder.row(
+        InlineKeyboardButton(text="Наши новости", callback_data="news"),
+        InlineKeyboardButton(text="Задать вопрос", callback_data="question"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="Запросить демо", callback_data="demo")
+    )
     return builder.as_markup()
 
 def yes_no_back_keyboard():
