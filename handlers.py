@@ -1,13 +1,4 @@
 import os
-
-from aiogram import Router, F
-from aiogram.filters import CommandStart
-
-import keyboards
-import texts
-
-import aiosmtplib
-from email.message import EmailMessage
 from aiogram.types import FSInputFile
 from aiogram import Router, types, F
 from aiogram.filters import Command
@@ -107,6 +98,7 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
 
     elif data == "no":
         await callback.message.delete()
+        await state.update_data(scenario="no")
         await callback.message.answer(DEMO_OTHER_PHONE, reply_markup=back_inline_keyboard())
         await state.set_state(Form.phone)
 
@@ -179,7 +171,7 @@ async def process_phone(message: types.Message, state: FSMContext):
 
     full_name = data.get('full_name') or (user_from_db[1] if user_from_db else "")
     company = data.get('company_position') or (user_from_db[2] if user_from_db else "")
-    question = ""  # можно взять из БД, если есть
+    question = data.get('question') or (user_from_db[3] if user_from_db else "")
     username = message.from_user.username
 
     # Сохраняем пользователя в базу
@@ -190,6 +182,12 @@ async def process_phone(message: types.Message, state: FSMContext):
     print(scenario)
     if scenario == "gift":
         await message.answer(THANKS_GIFT, reply_markup=types.ReplyKeyboardRemove())
+
+    if scenario == "no":
+        user = get_user(user_id)
+        if user:
+            await send_email_to_sales(user)
+            await message.answer(DEMO_THANKS)
 
     await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
     await state.clear()
