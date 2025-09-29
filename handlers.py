@@ -70,9 +70,6 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
 
         return
 
-        await state.clear()
-        await callback.message.answer(START_MSG, reply_markup=start_inline_keyboard())
-
     elif data == "news":
         await callback.message.delete()
         await callback.message.answer(NEWS_MSG)
@@ -112,7 +109,6 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
 async def process_full_name(message: types.Message, state: FSMContext):
     await state.update_data(full_name=message.text)
 
-    #await message.answer_document(pdf_file)
     await message.answer(ASK_COMPANY_POSITION, reply_markup=back_inline_keyboard())
     await state.set_state(Form.company_position)
 
@@ -146,14 +142,8 @@ async def process_question(message: types.Message, state: FSMContext):
     user = get_user(user_id)
     if user:
         await message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
-    #await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
+
     await state.clear()
-    #await state.update_data(scenario="demo")
-    #await state.set_state(Form.questions)
-    #if user:
-        #await callback.message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
-    #await message.answer(ASK_CONTACT, reply_markup=contact_keyboard())
-    #await state.set_state(Form.phone)
 
 @router.message(Form.phone, F.content_type.in_([types.ContentType.TEXT, types.ContentType.CONTACT]))
 async def process_phone(message: types.Message, state: FSMContext):
@@ -212,37 +202,3 @@ async def send_email_to_sales(user_data):
     #    username=config.SMTP_USER,
     #    password=config.SMTP_PASSWORD
     #)
-
-"""
-router = Router()
-
-@router.message()
-async def handler_step1(message, state):
-
-    await state.set_state(DialogBot.step1)
-
-@router.message()
-async def handler_step2(message, state):
-
-   await state.set_state(DialogBot.step2)
-
-@router.message()
-async def handler_step4(message, state):
-
-   await state.clear()
-
-
-
-
-@router.callback_query(F.data == 'Gift')
-async def gift(call):
-    print('Пользователь нажал на кнопку Gift')
-    await call.answer()
-
-# При начале диалога с ботом (когда пишется в бота /start)
-@router.message(CommandStart())
-async def start(message):
-    # Отвечаем на сообщение
-    await message.answer(texts.start, reply_markup=keyboards.inline_gift)
-   
-"""

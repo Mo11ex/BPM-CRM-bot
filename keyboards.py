@@ -41,22 +41,3 @@ def contact_keyboard():
         one_time_keyboard=True
     )
     return keyboard
-
-"""
-inline_gift = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            InlineKeyboardButton(text="Хочу подарок!", callback_data='Gift'),
-        ],
-    ],
-)
-
-inline_kb = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            InlineKeyboardButton(text="Новости Коруса", callback_data='News'),
-            InlineKeyboardButton(text="Запросить демо", callback_data='subscribe'),
-        ],
-    ],
-)
-"""
