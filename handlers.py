@@ -58,7 +58,6 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
             await state.clear()
             await callback.message.delete()
             await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
-            #await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
         elif scenario == "question":
             await state.clear()
             await callback.message.delete()
@@ -171,7 +170,10 @@ async def process_phone(message: types.Message, state: FSMContext):
     scenario = data.get("scenario")
     print(scenario)
     if scenario == "gift":
-        await message.answer(THANKS_GIFT, reply_markup=types.ReplyKeyboardRemove())
+        all_media_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'files')
+        gift_photo = FSInputFile(path=os.path.join(all_media_dir, 'gift.JPG'))
+        await message.answer_photo(gift_photo, caption=THANKS_GIFT, show_caption_above_media=True,
+                                   reply_markup=types.ReplyKeyboardRemove())
 
     if scenario == "no":
         user = get_user(user_id)

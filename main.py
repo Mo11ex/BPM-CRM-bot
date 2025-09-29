@@ -2,10 +2,8 @@ import os
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.fsm.state import StatesGroup, State
 import asyncio
 from handlers import router
-import handlers
 
 load_dotenv()  # загружает .env
 
