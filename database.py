@@ -1,6 +1,7 @@
 import sqlite3
+import psycopg2
 
-conn = sqlite3.connect("users.db")
+conn = psycopg2.connect()
 cursor = conn.cursor()
 
 cursor.execute('''
