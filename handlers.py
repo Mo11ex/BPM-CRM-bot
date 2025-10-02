@@ -93,7 +93,7 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
 
     elif data == "demo":
         await callback.message.delete()
-        user = get_user(user_id)
+        user = await get_user(user_id)
         await state.update_data(scenario="demo")
         if user:
             await callback.message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
@@ -108,7 +108,7 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
 
     elif data == "yes":
         await callback.message.delete()
-        user = get_user(user_id)
+        user = await get_user(user_id)
         if user:
             await send_email_to_sales(user)
             await callback.message.answer(DEMO_THANKS)
@@ -141,7 +141,7 @@ async def process_question(message: types.Message, state: FSMContext):
     # Сначала попробуем получить данные из состояния FSM
     data = await state.get_data()
     user_id = message.from_user.id
-    user_from_db = get_user(user_id)
+    user_from_db = await get_user(user_id)
 
     full_name = data.get('full_name') or (user_from_db[1] if user_from_db else "")
     company = data.get('company_position') or (user_from_db[2] if user_from_db else "")
@@ -155,7 +155,7 @@ async def process_question(message: types.Message, state: FSMContext):
     data = await state.get_data()
     scenario = data.get("scenario")
     print(scenario)
-    user = get_user(user_id)
+    user = await get_user(user_id)
     if user:
         await message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
 
@@ -173,7 +173,7 @@ async def process_phone(message: types.Message, state: FSMContext):
     # Сначала попробуем получить данные из состояния FSM
     data = await state.get_data()
     user_id = message.from_user.id
-    user_from_db = get_user(user_id)
+    user_from_db = await get_user(user_id)
 
     full_name = data.get('full_name') or (user_from_db[1] if user_from_db else "")
     company = data.get('company_position') or (user_from_db[2] if user_from_db else "")
@@ -181,7 +181,7 @@ async def process_phone(message: types.Message, state: FSMContext):
     username = message.from_user.username
 
     # Сохраняем пользователя в базу
-    add_or_update_user(user_id, full_name, company, question, phone, username)
+    await add_or_update_user(user_id, full_name, company, question, phone, username)
 
     data = await state.get_data()
     scenario = data.get("scenario")
@@ -193,7 +193,7 @@ async def process_phone(message: types.Message, state: FSMContext):
                                    reply_markup=types.ReplyKeyboardRemove())
 
     if scenario == "no":
-        user = get_user(user_id)
+        user = await get_user(user_id)
         if user:
             await send_email_to_sales(user)
             await message.answer(DEMO_THANKS)
