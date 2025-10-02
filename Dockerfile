@@ -3,7 +3,7 @@ FROM python:3.11-slim
 
 # Установим утилиты (для сборки зависимостей и запуска проверки)
 RUN apt-get update \
- && apt-get install -y --no-install-recommends build-essential gcc netcat \
+ && apt-get install -y --no-install-recommends build-essential gcc netcat-openbsd curl \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
