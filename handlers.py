@@ -1,4 +1,6 @@
 import os
+import logging
+from pathlib import Path
 from aiogram.types import FSInputFile
 from aiogram import Router, types, F
 from aiogram.filters import Command
@@ -9,6 +11,7 @@ from database import add_or_update_user, get_user
 from keyboards import start_inline_keyboard, back_inline_keyboard, main_menu_keyboard, yes_no_back_keyboard, contact_keyboard
 from texts import *
 
+logger = logging.getLogger(__name__)
 router = Router()
 
 class Form(StatesGroup):
@@ -17,10 +20,21 @@ class Form(StatesGroup):
     company_position = State()
     phone = State()
 
+# helper: найти директорию с медиа
+BASE_DIR = Path(__file__).resolve().parent
+POSSIBLE_MEDIA_DIRS = [BASE_DIR / 'files', BASE_DIR / 'file', BASE_DIR.parent / 'files', BASE_DIR.parent / 'file']
+MEDIA_DIR = None
+for d in POSSIBLE_MEDIA_DIRS:
+    if d.exists():
+        MEDIA_DIR = d
+        break
+    if MEDIA_DIR is None:
+        MEDIA_DIR = BASE_DIR # fallback
+
 # /start
 @router.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
-    user = get_user(message.from_user.id)
+    user = await get_user(message.from_user.id)
     if user:
         await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
     else:
@@ -35,9 +49,12 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
     if data == "gift":
         await state.update_data(scenario="gift")
         await callback.message.delete()
-        all_media_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'files')
+        pdf_path = MEDIA_DIR / 'Политика обработки и защиты персональных данных.pdf'
+        if not pdf_path.exists():
+            await callback.message.answer('Файл политики не найден. Обратитесь к администратору.')
+            return
         # Загружаем PDF-файл из папки
-        pdf_file = FSInputFile(path=os.path.join(all_media_dir, 'Политика обработки и защиты персональных данных.pdf'))
+        pdf_file = FSInputFile(path=str(pdf_path))
         await callback.message.answer_document(
             pdf_file,
             caption=ASK_FULL_NAME,
@@ -133,7 +150,7 @@ async def process_question(message: types.Message, state: FSMContext):
     username = message.from_user.username
 
     # Сохраняем пользователя в базу
-    add_or_update_user(user_id, full_name, company, question, phone, username)
+    await add_or_update_user(user_id, full_name, company, question, phone, username)
 
     data = await state.get_data()
     scenario = data.get("scenario")

@@ -1,3 +1,4 @@
+asyncpg
 aiosmtplib
 aiogram
 python-dotenv

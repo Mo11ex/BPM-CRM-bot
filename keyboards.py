@@ -1,6 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def start_inline_keyboard():

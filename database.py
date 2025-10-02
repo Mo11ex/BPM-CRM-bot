@@ -1,41 +1,75 @@
+# db_async.py (пример, с asyncpg)
 import os
-import psycopg2
+import asyncpg
+import logging
 
-conn = psycopg2.connect(
-    dbname=os.getenv("POSTGRES_DB", "event_bot_db"),
-    user=os.getenv("POSTGRES_USER", "admin"),
-    password=os.getenv("POSTGRES_PASSWORD", "mypassword"),  # замени на свой
-    host=os.getenv("DATABASE_HOST", "db"),
-    port=os.getenv("DATABASE_PORT", "5432"),
-)
-cursor = conn.cursor()
+logger = logging.getLogger(__name__)
+_pool: asyncpg.pool.Pool | None = None
 
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
-    full_name TEXT,
-    company TEXT,
-    question TEXT,
-    phone TEXT,
-    username TEXT
-)
-''')
-conn.commit()
+async def init_db_pool():
+    global _pool
+    if _pool is not None:
+        return
 
-def add_or_update_user(user_id, full_name, company, question, phone, username):
-    with conn.cursor() as cursor:
-        cursor.execute('''
+    db_config = {
+        'user': os.getenv('POSTGRES_USER', 'admin'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'mypassword'),
+        'database': os.getenv('POSTGRES_DB', 'event_bot_db'),
+        'host': os.getenv('DATABASE_HOST', 'db'),
+        'port': int(os.getenv('DATABASE_PORT', 5432)),
+    }
+    logger.info('Initializing DB pool...')
+    _pool = await asyncpg.create_pool(min_size=1, max_size=10, **db_config)
+    # Создадим таблицу, если её нет
+    async with _pool.acquire() as conn:
+        await conn.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                user_id BIGINT PRIMARY KEY,
+                full_name TEXT,
+                company TEXT,
+                question TEXT,
+                phone TEXT,
+                username TEXT
+            )
+        ''')
+    logger.info('DB pool initialized')
+
+
+async def close_db_pool():
+    global _pool
+    if _pool is None:
+        return
+    await _pool.close()
+    _pool = None
+    logger.info('DB pool closed')
+
+
+async def add_or_update_user(user_id: int, full_name: str | None, company: str | None,
+question: str | None, phone: str | None, username: str | None):
+    """Insert or update user in DB."""
+    global _pool
+    if _pool is None:
+        raise RuntimeError('DB pool is not initialized. Call init_db_pool() first')
+
+    async with _pool.acquire() as conn:
+        await conn.execute('''
             INSERT INTO users (user_id, full_name, company, question, phone, username)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id) DO UPDATE
             SET full_name = EXCLUDED.full_name,
-                company   = EXCLUDED.company,
-                question  = EXCLUDED.question,
-                phone     = EXCLUDED.phone,
-                username  = EXCLUDED.username
-        ''', (user_id, full_name, company, question, phone, username))
-        conn.commit()
+                company = EXCLUDED.company,
+                question = EXCLUDED.question,
+                phone = EXCLUDED.phone,
+                username = EXCLUDED.username
+        ''', user_id, full_name, company, question, phone, username)
 
-def get_user(user_id):
-    cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
-    return cursor.fetchone()
+
+async def get_user(user_id: int):
+    """Return a Record-like tuple (same order as earlier code) or None."""
+    global _pool
+    if _pool is None:
+        raise RuntimeError('DB pool is not initialized. Call init_db_pool() first')
+
+    async with _pool.acquire() as conn:
+        row = await conn.fetchrow('SELECT user_id, full_name, company, question, phone, username FROM users WHERE user_id = $1', user_id)
+        return row # может быть None или asyncpg.Record

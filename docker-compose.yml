@@ -1,24 +1,33 @@
 version: "3.8"
+
 services:
-  db:
-    image: postgres
-    restart: always
+  postgres:
+    image: postgres:15
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   bot:
-    build: ./bot
-    restart: always
-    env_file: ./bot/.env
+    build: .
+    env_file:
+      - .env
     depends_on:
-      - db
-    command: python bot.py
+      - postgres
+    volumes:
+      - ./mybot/file:/app/files:ro
+    restart: unless-stopped
 
 volumes:
   pgdata:
