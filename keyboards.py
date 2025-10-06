@@ -29,6 +29,13 @@ def yes_no_back_keyboard():
     builder.add(InlineKeyboardButton(text="Назад", callback_data="back"))
     return builder.as_markup()
 
+def yes_no_back_keyboard_question():
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text="Да", callback_data="yesquestion"))
+    builder.add(InlineKeyboardButton(text="Нет", callback_data="noquestion"))
+    builder.add(InlineKeyboardButton(text="Назад", callback_data="back"))
+    return builder.as_markup()
+
 def contact_keyboard():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[

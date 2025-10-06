@@ -13,7 +13,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 from database import add_or_update_user, get_user
-from keyboards import start_inline_keyboard, back_inline_keyboard, main_menu_keyboard, yes_no_back_keyboard, contact_keyboard
+from keyboards import start_inline_keyboard, back_inline_keyboard, main_menu_keyboard, yes_no_back_keyboard, \
+    contact_keyboard, yes_no_back_keyboard_question
 from texts import *
 
 load_dotenv()
@@ -51,7 +52,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
 @router.callback_query()
 async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
     demo_request = False
-    bIsQuestion = False
     user_id = callback.from_user.id
     data = callback.data
     await callback.message.delete()
@@ -95,31 +95,38 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
         await state.update_data(scenario="demo")
         user = await get_user(user_id)
         if user:
-            demo_request = True
             await callback.message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
 
     elif data == "question":
         await state.update_data(scenario="question")
         user = await get_user(user_id)
         if user:
-            bIsQuestion = True
             await callback.message.answer(QUESTIONS, reply_markup=back_inline_keyboard())
             await state.set_state(Form.questions)
 
     elif data == "yes":
         user = await get_user(user_id)
         if user:
-            if demo_request:
-                await send_email_to_sales_demo(user)
-            if bIsQuestion:
-                await send_email_to_sales_question(user)
+            await send_email_to_sales_demo(user)
+            await callback.message.answer(DEMO_THANKS)
+            await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
+
+    elif data == "yesquestion":
+        user = await get_user(user_id)
+        if user:
+            await send_email_to_sales_question(user)
             await callback.message.answer(DEMO_THANKS)
             await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
 
     elif data == "no":
         await state.update_data(scenario="no")
         await callback.message.answer(DEMO_OTHER_PHONE, reply_markup=back_inline_keyboard())
-        await state.set_state(Form.phone, demo=demo_request, Question=bIsQuestion)
+        await state.set_state(Form.phone)
+
+    elif data == "noquestion":
+        await state.update_data(scenario="noquestion")
+        await callback.message.answer(DEMO_OTHER_PHONE, reply_markup=back_inline_keyboard())
+        await state.set_state(Form.phone)
 
 # FSM обработка сообщений
 @router.message(Form.full_name)
@@ -159,12 +166,12 @@ async def process_question(message: types.Message, state: FSMContext):
     print(scenario)
     user = await get_user(user_id)
     if user:
-        await message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
+        await message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard_question())
 
     await state.clear()
 
 @router.message(Form.phone, F.content_type.in_([types.ContentType.TEXT, types.ContentType.CONTACT]))
-async def process_phone(message: types.Message, state: FSMContext, demo=False, Question=False):
+async def process_phone(message: types.Message, state: FSMContext):
     phone = message.contact.phone_number if message.contact else message.text
 
     # Сначала попробуем получить данные из состояния FSM
@@ -200,10 +207,13 @@ async def process_phone(message: types.Message, state: FSMContext, demo=False, Q
     if scenario == "no":
         user = await get_user(user_id)
         if user:
-            if demo:
-                await send_email_to_sales_demo(user)
-            if Question:
-                await send_email_to_sales_question(user)
+            await send_email_to_sales_demo(user)
+            await message.answer(DEMO_THANKS)
+
+    if scenario == "noquestion":
+        user = await get_user(user_id)
+        if user:
+            await send_email_to_sales_question(user)
             await message.answer(DEMO_THANKS)
 
     await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
