@@ -50,6 +50,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
 # Обработка inline callback
 @router.callback_query()
 async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
+    demo_request = False
+    bIsQuestion = False
     user_id = callback.from_user.id
     data = callback.data
     await callback.message.delete()
@@ -93,26 +95,31 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
         await state.update_data(scenario="demo")
         user = await get_user(user_id)
         if user:
+            demo_request = True
             await callback.message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
 
     elif data == "question":
         await state.update_data(scenario="question")
         user = await get_user(user_id)
         if user:
+            bIsQuestion = True
             await callback.message.answer(QUESTIONS, reply_markup=back_inline_keyboard())
             await state.set_state(Form.questions)
 
     elif data == "yes":
         user = await get_user(user_id)
         if user:
-            await send_email_to_sales(user)
+            if demo_request:
+                await send_email_to_sales_demo(user)
+            if bIsQuestion:
+                await send_email_to_sales_question(user)
             await callback.message.answer(DEMO_THANKS)
             await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
 
     elif data == "no":
         await state.update_data(scenario="no")
         await callback.message.answer(DEMO_OTHER_PHONE, reply_markup=back_inline_keyboard())
-        await state.set_state(Form.phone)
+        await state.set_state(Form.phone, demo=demo_request, Question=bIsQuestion)
 
 # FSM обработка сообщений
 @router.message(Form.full_name)
@@ -157,7 +164,7 @@ async def process_question(message: types.Message, state: FSMContext):
     await state.clear()
 
 @router.message(Form.phone, F.content_type.in_([types.ContentType.TEXT, types.ContentType.CONTACT]))
-async def process_phone(message: types.Message, state: FSMContext):
+async def process_phone(message: types.Message, state: FSMContext, demo=False, Question=False):
     phone = message.contact.phone_number if message.contact else message.text
 
     # Сначала попробуем получить данные из состояния FSM
@@ -193,7 +200,10 @@ async def process_phone(message: types.Message, state: FSMContext):
     if scenario == "no":
         user = await get_user(user_id)
         if user:
-            await send_email_to_sales(user)
+            if demo:
+                await send_email_to_sales_demo(user)
+            if Question:
+                await send_email_to_sales_question(user)
             await message.answer(DEMO_THANKS)
 
     await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
@@ -203,8 +213,10 @@ class EmailSendError(Exception):
     """Ошибка при отправке email."""
     pass
 
+
+
 # Функция отправки email
-async def send_email_to_sales(user_data):
+async def send_email_to_sales_question(user_data):
     full_name, company, question, phone, username = user_data[1], user_data[2], user_data[3], user_data[4], user_data[5]
     logger.info("Тут мы отправялем данные: " + full_name + " " + company + " " + question + " " + phone + " " + username )
 
@@ -230,11 +242,82 @@ async def send_email_to_sales(user_data):
 
     html_body = (
             "<html><body>"
-            "<h3>Новая заявка на демо</h3>"
+            "<h3>Новая заявка: вопрос</h3>"
             "<table cellpadding='4' cellspacing='0'>"
             f"<tr><td><b>ФИО</b></td><td>{esc(full_name)}</td></tr>"
             f"<tr><td><b>Компания</b></td><td>{esc(company)}</td></tr>"
             f"<tr><td><b>Вопрос</b></td><td>{esc(question)}</td></tr>"
+            f"<tr><td><b>Телефон</b></td><td>{esc(phone)}</td></tr>"
+            f"<tr><td><b>Telegram</b></td><td>@{esc(username)}</td></tr>"
+            "</table>"
+            "</body></html>"
+    )
+
+    msg = EmailMessage()
+    msg["From"] = os.getenv('EMAIL_FROM')
+    msg["To"] = os.getenv('EMAIL_TO')
+    msg["Subject"] = "Новая заявка: вопрос"
+    msg.set_content(plain)
+    msg.add_alternative(html_body, subtype="html")
+
+    # Отправка с retry и экспоненциальным бэкоффом
+    max_retries = 3
+    base_delay = 1.0  # секунды
+    last_exc: Exception | None = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            await aiosmtplib.send(
+                msg,
+                hostname=os.getenv('SMTP_HOST'),
+                port=os.getenv('SMTP_PORT'),
+                start_tls=True,
+                username=os.getenv('SMTP_USER'),
+                password=os.getenv('SMTP_PASSWORD')
+            )
+            logger.info("Письмо успешно отправлено на %s (попытка %d)", os.getenv('EMAIL_TO'), attempt)
+            return
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("Попытка %d: ошибка при отправке почты: %s", attempt, exc, exc_info=False)
+            if attempt < max_retries:
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.debug("Ждем %.1f сек перед следующей попыткой", delay)
+                await asyncio.sleep(delay)
+
+    logger.exception("Не удалось отправить письмо после %d попыток", max_retries)
+    raise EmailSendError("Не удалось отправить письмо") from last_exc
+
+# Функция отправки email
+async def send_email_to_sales_demo(user_data):
+    full_name, company, question, phone, username = user_data[1], user_data[2], user_data[3], user_data[4], user_data[5]
+    logger.info("Тут мы отправялем данные: " + full_name + " " + company + " " + question + " " + phone + " " + username )
+
+    # Простейшая валидация входных данных (можно расширить)
+    if not full_name:
+        logger.warning("Пустое поле full_name при отправке письма")
+    if not os.getenv('EMAIL_TO'):
+        logger.error("EMAIL_TO не задан в конфиге")
+        raise EmailSendError("EMAIL_TO не задан в конфиге")
+
+    # Формируем тело письма (plain + html альтернативa)
+    plain = (
+        f"ФИО: {full_name}\n"
+        f"Компания: {company}\n"
+        f"Телефон: {phone}\n"
+        f"Telegram: @{username}"
+    )
+
+    # Экранируем значения для HTML
+    def esc(s: str | None) -> str:
+        return html.escape(s or "")
+
+    html_body = (
+            "<html><body>"
+            "<h3>Новая заявка на демо</h3>"
+            "<table cellpadding='4' cellspacing='0'>"
+            f"<tr><td><b>ФИО</b></td><td>{esc(full_name)}</td></tr>"
+            f"<tr><td><b>Компания</b></td><td>{esc(company)}</td></tr>"
             f"<tr><td><b>Телефон</b></td><td>{esc(phone)}</td></tr>"
             f"<tr><td><b>Telegram</b></td><td>@{esc(username)}</td></tr>"
             "</table>"
