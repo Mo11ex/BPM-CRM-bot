@@ -52,14 +52,17 @@ async def cmd_start(message: types.Message, state: FSMContext):
 async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     data = callback.data
+    await callback.message.delete()
 
     if data == "gift":
         await state.update_data(scenario="gift")
-        await callback.message.delete()
+
+
         pdf_path = MEDIA_DIR / 'Политика обработки и защиты персональных данных.pdf'
         if not pdf_path.exists():
             await callback.message.answer('Файл политики не найден. Обратитесь к администратору.')
             return
+
         # Загружаем PDF-файл из папки
         pdf_file = FSInputFile(path=str(pdf_path))
         await callback.message.answer_document(
@@ -67,54 +70,39 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
             caption=ASK_FULL_NAME,
             reply_markup=back_inline_keyboard()
         )
+
         await state.set_state(Form.full_name)
 
     elif data == "back":
         data = await state.get_data()
         scenario = data.get("scenario")
+        await state.clear()
         if scenario == "gift":
             # По умолчанию – возврат в стартовое сообщение
-            await state.clear()
-            await callback.message.delete()
             await callback.message.answer(START_MSG, reply_markup=start_inline_keyboard())
-        elif scenario == "demo":
-            # Возврат в главное меню
-            await state.clear()
-            await callback.message.delete()
-            await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
-        elif scenario == "question":
-            await state.clear()
-            await callback.message.delete()
-            await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
         else:
-            await state.clear()
-            await callback.message.delete()
             await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
 
         return
 
     elif data == "news":
-        await callback.message.delete()
         await callback.message.answer(NEWS_MSG)
         await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
 
     elif data == "demo":
-        await callback.message.delete()
-        user = await get_user(user_id)
         await state.update_data(scenario="demo")
+        user = await get_user(user_id)
         if user:
             await callback.message.answer(DEMO_ASK_CONFIRM.format(user[4]), reply_markup=yes_no_back_keyboard())
 
     elif data == "question":
-        await callback.message.delete()
-        user = await get_user(user_id)
         await state.update_data(scenario="question")
+        user = await get_user(user_id)
         if user:
             await callback.message.answer(QUESTIONS, reply_markup=back_inline_keyboard())
             await state.set_state(Form.questions)
 
     elif data == "yes":
-        await callback.message.delete()
         user = await get_user(user_id)
         if user:
             await send_email_to_sales(user)
@@ -122,7 +110,6 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
             await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
 
     elif data == "no":
-        await callback.message.delete()
         await state.update_data(scenario="no")
         await callback.message.answer(DEMO_OTHER_PHONE, reply_markup=back_inline_keyboard())
         await state.set_state(Form.phone)
@@ -130,16 +117,17 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
 # FSM обработка сообщений
 @router.message(Form.full_name)
 async def process_full_name(message: types.Message, state: FSMContext):
-    await state.update_data(full_name=message.text)
+    await state.update_data(full_name=message.text) # Обновляем full_name
 
-    await message.answer(ASK_COMPANY_POSITION, reply_markup=back_inline_keyboard())
-    await state.set_state(Form.company_position)
+    await message.answer(ASK_COMPANY_POSITION, reply_markup=back_inline_keyboard()) # Переходим в вопрос о компании
+    await state.set_state(Form.company_position) # Устанавливаем стейт
 
 @router.message(Form.company_position)
 async def process_company_position(message: types.Message, state: FSMContext):
-    await state.update_data(company_position=message.text)
-    await message.answer(ASK_CONTACT, reply_markup=contact_keyboard())
-    await state.set_state(Form.phone)
+    await state.update_data(company_position=message.text) # Обновляем company_position
+
+    await message.answer(ASK_CONTACT, reply_markup=contact_keyboard()) # Переходим в вопрос о номере телефона
+    await state.set_state(Form.phone) # Устанавливаем стейт
 
 @router.message(Form.questions)
 async def process_question(message: types.Message, state: FSMContext):
@@ -170,11 +158,6 @@ async def process_question(message: types.Message, state: FSMContext):
 
 @router.message(Form.phone, F.content_type.in_([types.ContentType.TEXT, types.ContentType.CONTACT]))
 async def process_phone(message: types.Message, state: FSMContext):
-    if message.text == "Назад":
-        await state.clear()
-        await message.answer(START_MSG, reply_markup=start_inline_keyboard())
-        return
-
     phone = message.contact.phone_number if message.contact else message.text
 
     # Сначала попробуем получить данные из состояния FSM
@@ -192,12 +175,20 @@ async def process_phone(message: types.Message, state: FSMContext):
 
     data = await state.get_data()
     scenario = data.get("scenario")
-    print(scenario)
+
+
     if scenario == "gift":
+
+        if message.text == "Назад":
+            await state.clear()
+            await message.answer(START_MSG, reply_markup=start_inline_keyboard())
+            return
+
         all_media_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'files')
         gift_photo = FSInputFile(path=os.path.join(all_media_dir, 'gift.JPG'))
         await message.answer_photo(gift_photo, caption=THANKS_GIFT, show_caption_above_media=True,
                                    reply_markup=types.ReplyKeyboardRemove())
+
 
     if scenario == "no":
         user = await get_user(user_id)
