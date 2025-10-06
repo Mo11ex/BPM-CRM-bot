@@ -100,7 +100,7 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
 
     elif data == "question":
         await callback.message.delete()
-        user = get_user(user_id)
+        user = await get_user(user_id)
         await state.update_data(scenario="question")
         if user:
             await callback.message.answer(QUESTIONS, reply_markup=back_inline_keyboard())
