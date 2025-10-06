@@ -1,6 +1,11 @@
+import asyncio
+import html
 import os
 import logging
+from email.message import EmailMessage
 from pathlib import Path
+from dotenv import load_dotenv
+import aiosmtplib
 from aiogram.types import FSInputFile
 from aiogram import Router, types, F
 from aiogram.filters import Command
@@ -11,6 +16,8 @@ from database import add_or_update_user, get_user
 from keyboards import start_inline_keyboard, back_inline_keyboard, main_menu_keyboard, yes_no_back_keyboard, contact_keyboard
 from texts import *
 
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 router = Router()
 
@@ -201,23 +208,79 @@ async def process_phone(message: types.Message, state: FSMContext):
     await message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
     await state.clear()
 
-
+class EmailSendError(Exception):
+    """Ошибка при отправке email."""
+    pass
 
 # Функция отправки email
 async def send_email_to_sales(user_data):
-    full_name, company, position, phone, username = user_data[1], user_data[2], user_data[3], user_data[4], user_data[5]
-    print("Тут мы отправялем данные: " + full_name + " " + company + " " + position + " " + phone + " " + username )
-    #msg = EmailMessage()
-    #msg["From"] = config.EMAIL_FROM
-    #msg["To"] = config.EMAIL_TO
-    #msg["Subject"] = "Новая заявка на демо"
-    #msg.set_content(f"ФИО: {full_name}\nКомпания: {company}\nДолжность: {position}\nТелефон: {phone}")
+    full_name, company, question, phone, username = user_data[1], user_data[2], user_data[3], user_data[4], user_data[5]
+    logger.info("Тут мы отправялем данные: " + full_name + " " + company + " " + question + " " + phone + " " + username )
 
-    #await aiosmtplib.send(
-   #     msg,
-    #    hostname=config.SMTP_HOST,
-    #    port=config.SMTP_PORT,
-    #    start_tls=True,
-    #    username=config.SMTP_USER,
-    #    password=config.SMTP_PASSWORD
-    #)
+    # Простейшая валидация входных данных (можно расширить)
+    if not full_name:
+        logger.warning("Пустое поле full_name при отправке письма")
+    if not os.getenv('EMAIL_TO'):
+        logger.error("EMAIL_TO не задан в конфиге")
+        raise EmailSendError("EMAIL_TO не задан в конфиге")
+
+    # Формируем тело письма (plain + html альтернативa)
+    plain = (
+        f"ФИО: {full_name}\n"
+        f"Компания: {company}\n"
+        f"Вопрос/Комментарий: {question}\n"
+        f"Телефон: {phone}\n"
+        f"Telegram: @{username}"
+    )
+
+    # Экранируем значения для HTML
+    def esc(s: str | None) -> str:
+        return html.escape(s or "")
+
+    html_body = (
+            "<html><body>"
+            "<h3>Новая заявка на демо</h3>"
+            "<table cellpadding='4' cellspacing='0'>"
+            f"<tr><td><b>ФИО</b></td><td>{esc(full_name)}</td></tr>"
+            f"<tr><td><b>Компания</b></td><td>{esc(company)}</td></tr>"
+            f"<tr><td><b>Вопрос</b></td><td>{esc(question)}</td></tr>"
+            f"<tr><td><b>Телефон</b></td><td>{esc(phone)}</td></tr>"
+            f"<tr><td><b>Telegram</b></td><td>@{esc(username)}</td></tr>"
+            "</table>"
+            "</body></html>"
+    )
+
+    msg = EmailMessage()
+    msg["From"] = os.getenv('EMAIL_FROM')
+    msg["To"] = os.getenv('EMAIL_TO')
+    msg["Subject"] = "Новая заявка на демо"
+    msg.set_content(plain)
+    msg.add_alternative(html_body, subtype="html")
+
+    # Отправка с retry и экспоненциальным бэкоффом
+    max_retries = 3
+    base_delay = 1.0  # секунды
+    last_exc: Exception | None = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            await aiosmtplib.send(
+                msg,
+                hostname=os.getenv('SMTP_HOST'),
+                port=os.getenv('SMTP_PORT'),
+                start_tls=True,
+                username=os.getenv('SMTP_USER'),
+                password=os.getenv('SMTP_PASSWORD')
+            )
+            logger.info("Письмо успешно отправлено на %s (попытка %d)", os.getenv('EMAIL_TO'), attempt)
+            return
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("Попытка %d: ошибка при отправке почты: %s", attempt, exc, exc_info=False)
+            if attempt < max_retries:
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.debug("Ждем %.1f сек перед следующей попыткой", delay)
+                await asyncio.sleep(delay)
+
+    logger.exception("Не удалось отправить письмо после %d попыток", max_retries)
+    raise EmailSendError("Не удалось отправить письмо") from last_exc
