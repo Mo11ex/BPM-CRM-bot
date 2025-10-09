@@ -29,5 +29,24 @@ services:
       - ./files:/app/files
     restart: unless-stopped
 
+  metabase:
+    image: metabase/metabase
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"     # доступ к Metabase через VPN: http://company-server:3000
+    volumes:
+      - metabase-data:/metabase-data
+    restart: unless-stopped
+    environment:
+    # при желании можно задать переменные окружения для Metabase (но не обязательно)
+    # MB_JETTY_HOST: "0.0.0.0"
+    # MB_DB_FILE: /metabase-data/metabase.db
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:3000/ || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
 volumes:
   pgdata:
