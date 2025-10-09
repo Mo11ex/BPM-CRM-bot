@@ -332,9 +332,15 @@ async def send_email_to_sales_question(user_data):
             "</body></html>"
     )
 
+    # Получатели (можно через запятую в .env)
+    emails = [email.strip() for email in os.getenv("EMAIL_TO", "").split(",") if email.strip()]
+    if not emails:
+        logger.error("EMAIL_TO не задан в конфиге")
+        raise EmailSendError("EMAIL_TO не задан в конфиге")
+
     msg = EmailMessage()
     msg["From"] = os.getenv('EMAIL_FROM')
-    msg["To"] = os.getenv('EMAIL_TO')
+    msg["To"] = ", ".join(emails)
     msg["Subject"] = "Новая заявка: вопрос"
     msg.set_content(plain)
     msg.add_alternative(html_body, subtype="html")
@@ -354,7 +360,7 @@ async def send_email_to_sales_question(user_data):
                 username=os.getenv('SMTP_USER'),
                 password=os.getenv('SMTP_PASSWORD')
             )
-            logger.info("Письмо успешно отправлено на %s (попытка %d)", os.getenv('EMAIL_TO'), attempt)
+            logger.info("Письмо успешно отправлено на %s (попытка %d)", msg["To"], attempt)
             return
         except Exception as exc:
             last_exc = exc
@@ -403,9 +409,15 @@ async def send_email_to_sales_demo(user_data):
             "</body></html>"
     )
 
+    # Получатели (можно через запятую в .env)
+    emails = [email.strip() for email in os.getenv("EMAIL_TO", "").split(",") if email.strip()]
+    if not emails:
+        logger.error("EMAIL_TO не задан в конфиге")
+        raise EmailSendError("EMAIL_TO не задан в конфиге")
+
     msg = EmailMessage()
     msg["From"] = os.getenv('EMAIL_FROM')
-    msg["To"] = os.getenv('EMAIL_TO')
+    msg["To"] = ", ".join(emails)
     msg["Subject"] = "Новая заявка на демо"
     msg.set_content(plain)
     msg.add_alternative(html_body, subtype="html")
@@ -425,7 +437,7 @@ async def send_email_to_sales_demo(user_data):
                 username=os.getenv('SMTP_USER'),
                 password=os.getenv('SMTP_PASSWORD')
             )
-            logger.info("Письмо успешно отправлено на %s (попытка %d)", os.getenv('EMAIL_TO'), attempt)
+            logger.info("Письмо успешно отправлено на %s (попытка %d)", msg["To"], attempt)
             return
         except Exception as exc:
             last_exc = exc
