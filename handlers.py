@@ -11,7 +11,9 @@ from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-
+from datetime import datetime, timezone, timedelta
+from aiogram import types
+from aiogram.exceptions import TelegramBadRequest
 from database import add_or_update_user, get_user
 from keyboards import start_inline_keyboard, back_inline_keyboard, main_menu_keyboard, yes_no_back_keyboard, \
     contact_keyboard, yes_no_back_keyboard_question
@@ -38,6 +40,72 @@ for d in POSSIBLE_MEDIA_DIRS:
         break
     if MEDIA_DIR is None:
         MEDIA_DIR = BASE_DIR # fallback
+
+async def handle_stale_callback(callback: types.CallbackQuery, state) -> bool:
+    """
+    Пытается безопасно удалить сообщение с inline-кнопкой.
+    Если сообщение слишком старое или Telegram вернул ошибку удаления,
+    отправляет пользователю уведомление и меню в зависимости от сценария.
+
+    Возвращает True — если выполнился fallback (нужно прервать дальнейшую обработку),
+    False — если удаление прошло успешно и можно продолжать обычную обработку.
+    """
+    # снимем "часики" у клиента
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+    msg = callback.message
+    if not msg:
+        # Нет сообщения — ничего не делаем, но лучше прервать обработку
+        return True
+
+    # Предварительная проверка возраста — чтобы не полагаться только на исключение
+    try:
+        age = datetime.now(timezone.utc) - msg.date
+        if age > timedelta(hours=48):
+            # сообщение слишком старое — показываем приветствие и меню по сценарию
+            data = await state.get_data()
+            scenario = data.get("scenario")
+            await state.clear()
+            await callback.message.answer(STALE_TEXT)
+            if scenario == "gift":
+                await callback.message.answer(START_MSG, reply_markup=start_inline_keyboard())
+            else:
+                await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
+            return True
+    except Exception:
+        # если не получилось определить дату — продолжаем и попробуем удалить (или падём в except ниже)
+        pass
+
+    # Пробуем удалить; если Telegram вернёт ошибку — делаем fallback
+    try:
+        await msg.delete()
+        return False  # удаление прошло — можно продолжать обработку
+    except TelegramBadRequest as e:
+        text = str(e).lower()
+        # Проверяем на типичную ошибку "can't be deleted for everyone" или общую ошибку удаления
+        if "can't be deleted for everyone" in text or "message can't be deleted" in text or "message to delete not found" in text:
+            data = await state.get_data()
+            scenario = data.get("scenario")
+            await state.clear()
+            # сначала уведомление
+            try:
+                await callback.message.answer(STALE_TEXT)
+            except Exception:
+                pass
+            # а затем меню в зависимости от сценария
+            try:
+                if scenario == "gift":
+                    await callback.message.answer(START_MSG, reply_markup=start_inline_keyboard())
+                else:
+                    await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
+            except Exception:
+                pass
+            return True
+        # если это другая ошибка — пробрасываем, чтобы не скрыть баги
+        raise
 
 # /start
 @router.message(Command("start"))
