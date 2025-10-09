@@ -100,7 +100,7 @@ async def handle_stale_callback(callback: types.CallbackQuery, state) -> bool:
                 if scenario == "gift":
                     await callback.message.answer(START_MSG, reply_markup=start_inline_keyboard())
                 else:
-                    await callback.message.answer(MAIN_MENU_MSG, reply_markup=main_menu_keyboard())
+                    await callback.message.answer(MAIN_MENU_MSG_48, reply_markup=main_menu_keyboard())
             except Exception:
                 pass
             return True
