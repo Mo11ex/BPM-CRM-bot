@@ -122,7 +122,8 @@ async def callback_handler(callback: types.CallbackQuery, state: FSMContext):
     demo_request = False
     user_id = callback.from_user.id
     data = callback.data
-    await callback.message.delete()
+    if await handle_stale_callback(callback, state):
+        return
 
     if data == "gift":
         await state.update_data(scenario="gift")
