@@ -35,7 +35,7 @@ async def init_db_pool():
 
         await conn.execute('''
             ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'Europe/Moscow')
         ''')
     logger.info('DB pool initialized')
 
