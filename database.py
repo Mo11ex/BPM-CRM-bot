@@ -32,6 +32,11 @@ async def init_db_pool():
                 username TEXT
             )
         ''')
+
+        await conn.execute('''
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
+        ''')
     logger.info('DB pool initialized')
 
 
