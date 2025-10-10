@@ -33,10 +33,36 @@ async def init_db_pool():
             )
         ''')
 
+        # Проверяем, есть ли колонка created_at
+        column_info = await conn.fetchrow('''
+                    SELECT column_name, data_type
+                    FROM information_schema.columns
+                    WHERE table_name='users' AND column_name='created_at'
+                ''')
+
+        if column_info is None:
+            # Колонки нет — создаём TIMESTAMPTZ с московским временем
+            await conn.execute('''
+                        ALTER TABLE users
+                        ADD COLUMN created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'Europe/Moscow')
+                    ''')
+            logger.info("Column created_at added as TIMESTAMPTZ with Moscow timezone")
+        elif column_info['data_type'] == 'timestamp without time zone':
+            # Колонка есть как TIMESTAMP — конвертируем в TIMESTAMPTZ
+            await conn.execute('''
+                        ALTER TABLE users
+                        ALTER COLUMN created_at TYPE TIMESTAMPTZ
+                        USING created_at AT TIME ZONE 'Europe/Moscow'
+                    ''')
+            logger.info("Column created_at converted from TIMESTAMP to TIMESTAMPTZ with Moscow timezone")
+
+        # Обновляем NULL значения старых записей
         await conn.execute('''
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT (NOW() AT TIME ZONE 'Europe/Moscow')
-        ''')
+                    UPDATE users
+                    SET created_at = NOW() AT TIME ZONE 'Europe/Moscow'
+                    WHERE created_at IS NULL
+                ''')
+
     logger.info('DB pool initialized')
 
 
